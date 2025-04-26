@@ -1,4 +1,4 @@
-# Grid Layout Generator for Navagunjara Reborn
+# Navagunjara Reborn - Grid Layout Generator
 
 Part of the [Earth Innovation Hub's Navagunjara Reborn project](https://earthinnovationhub.org/navagunjara_reborn).
 
@@ -27,4 +27,4 @@ The script uses computer vision techniques to analyze grid patterns in images, c
 
 ## License
 
-[Apache 2.0 License](LICENSE) 
+[Apache 2.0 License](LICENSE)
