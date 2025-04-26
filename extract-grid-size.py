@@ -74,8 +74,8 @@ def analyze_grid(image_path, paper_width_inches):
     # Center the drawing
     left_margin = (paper_width_cm - drawing_width_cm) / 2  # Center the drawing
     right_margin = left_margin
-    top_margin = 1.5  # Reduced from 2.5cm
-    bottom_margin = 4.5  # Reduced from 7.5cm
+    top_margin = 0.8  # Reduced even further from 1.5cm
+    bottom_margin = 2.5  # Reduced from 4.5cm for more paper conservation
     
     # Determine if rotation is needed (if width > height, rotate for best fit)
     need_rotation = width_meters > length_meters
@@ -148,6 +148,12 @@ def analyze_grid(image_path, paper_width_inches):
     width_norm = drawing_width_cm / total_width_cm
     height_norm = (pdf_length * 100) / total_length_cm
     
+    # Store actual drawing coordinates for reference by other elements
+    drawing_left = left_margin_norm
+    drawing_right = left_margin_norm + width_norm
+    drawing_bottom = bottom_margin_norm
+    drawing_top = bottom_margin_norm + height_norm
+    
     # Place image
     img_ax = fig.add_axes([left_margin_norm, bottom_margin_norm, width_norm, height_norm])
     img_ax.imshow(img_rgb)
@@ -199,101 +205,138 @@ def analyze_grid(image_path, paper_width_inches):
         median_h_spacing = img_rgb.shape[0] / max(1, num_rows)
         median_v_spacing = img_rgb.shape[1] / max(1, num_cols)
     
-    # Find center region of grid for most reliable grid corner
-    if need_rotation:
-        # If image is rotated, adjust indices accordingly
-        h_center_idx = len(horizontal_positions) // 3
-        v_center_idx = len(vertical_positions) // 3
-    else:
-        # Use points closer to center for better reliability
-        h_center_idx = len(horizontal_positions) // 3
-        v_center_idx = len(vertical_positions) // 3
+    # Ensure we're using the actual grid cells for alignment, not arbitrary positions
+    grid_unit_width_pixels = median_v_spacing  # Width of a 10cm grid cell in pixels
+    grid_unit_height_pixels = median_h_spacing  # Height of a 10cm grid cell in pixels
     
-    # Ensure valid indices with sufficient margin from edges
-    h_center_idx = max(1, min(h_center_idx, len(horizontal_positions) - 2))
-    v_center_idx = max(1, min(v_center_idx, len(vertical_positions) - 2))
+    # Find the pixel coordinates of the grid corners for precise alignment
+    grid_top_left_x = vertical_positions[0] if len(vertical_positions) > 0 else 0
+    grid_top_left_y = horizontal_positions[0] if len(horizontal_positions) > 0 else 0
+    grid_bottom_right_x = vertical_positions[-1] if len(vertical_positions) > 0 else img_rgb.shape[1]
+    grid_bottom_right_y = horizontal_positions[-1] if len(horizontal_positions) > 0 else img_rgb.shape[0]
     
-    # Get corner coordinates from the more reliable region
-    if need_rotation:
-        corner_y = horizontal_positions[h_center_idx]
-        corner_x = vertical_positions[v_center_idx]
+    # Draw checkered scale bars perfectly aligned with the grid itself, not arbitrary margins
+    bar_thickness = min(grid_unit_width_pixels, grid_unit_height_pixels) * 0.15  # Slightly thicker
+    
+    # Place horizontal scale bar precisely at the top edge of the grid
+    h_scale_bar_x = grid_top_left_x
+    h_scale_bar_y = grid_top_left_y - bar_thickness * 1.5  # Position just above the grid
+    
+    # Place vertical scale bar precisely at the left edge of the grid
+    v_scale_bar_x = grid_top_left_x - bar_thickness * 1.5  # Position just left of the grid
+    v_scale_bar_y = grid_top_left_y
+    
+    # Draw checkered 1cm segments for horizontal scale bar (10 segments of 1cm each)
+    segment_width = grid_unit_width_pixels / 10  # Each segment is 1cm
+    
+    for i in range(10):
+        # Alternate colors for checkered pattern
+        color = 'black' if i % 2 == 0 else 'white'
+        edge_color = 'white' if i % 2 == 0 else 'black'
         
-        # Use statistically validated spacing for scale bars
-        scale_bar_pixel_width = median_v_spacing
-        scale_bar_pixel_height = median_h_spacing
-    else:
-        corner_y = horizontal_positions[h_center_idx]
-        corner_x = vertical_positions[v_center_idx]
+        # Create one segment at a time, aligned precisely with the grid top edge
+        h_segment = Rectangle((h_scale_bar_x + i * segment_width, h_scale_bar_y), 
+                             segment_width, bar_thickness,
+                             linewidth=2, edgecolor=edge_color, facecolor=color, alpha=1.0)
+        img_ax.add_patch(h_segment)
+    
+    # Draw checkered 1cm segments for vertical scale bar (10 segments of 1cm each)
+    segment_height = grid_unit_height_pixels / 10  # Each segment is 1cm
+    
+    for i in range(10):
+        # Alternate colors for checkered pattern
+        color = 'black' if i % 2 == 0 else 'white'
+        edge_color = 'white' if i % 2 == 0 else 'black'
         
-        # Use statistically validated spacing for scale bars
-        scale_bar_pixel_width = median_v_spacing
-        scale_bar_pixel_height = median_h_spacing
+        # Create one segment at a time, aligned precisely with the grid left edge
+        v_segment = Rectangle((v_scale_bar_x, v_scale_bar_y + i * segment_height), 
+                             bar_thickness, segment_height,
+                             linewidth=2, edgecolor=edge_color, facecolor=color, alpha=1.0)
+        img_ax.add_patch(v_segment)
     
-    # Make scale bars more prominent
-    bar_thickness = min(scale_bar_pixel_width, scale_bar_pixel_height) * 0.08
+    # Add scale bar labels with larger font size (doubled)
+    img_ax.text(h_scale_bar_x + segment_width/2, 
+               h_scale_bar_y + bar_thickness*3, 
+               "10 cm", color='black', fontsize=24, fontweight='bold',
+               ha='center', va='bottom', bbox=dict(facecolor='white', alpha=1.0, pad=4))
     
-    # Draw more prominent L-shaped scale bar (horizontal part)
-    horizontal_bar = Rectangle((corner_x, corner_y - bar_thickness/2), 
-                              scale_bar_pixel_width, bar_thickness,
-                              linewidth=2, edgecolor='black', facecolor='white', alpha=1.0)
-    img_ax.add_patch(horizontal_bar)
-    
-    # Draw more prominent L-shaped scale bar (vertical part)
-    vertical_bar = Rectangle((corner_x - bar_thickness/2, corner_y - scale_bar_pixel_height), 
-                            bar_thickness, scale_bar_pixel_height,
-                            linewidth=2, edgecolor='black', facecolor='white', alpha=1.0)
-    img_ax.add_patch(vertical_bar)
-    
-    # Add scale bar labels with larger font size
-    img_ax.text(corner_x + scale_bar_pixel_width/2, 
-               corner_y + bar_thickness*3, 
-               "10 cm", color='black', fontsize=12, fontweight='bold',
-               ha='center', va='bottom', bbox=dict(facecolor='white', alpha=1.0, pad=3))
-    
-    img_ax.text(corner_x - bar_thickness*3, 
-               corner_y - scale_bar_pixel_height/2, 
-               "10 cm", color='black', fontsize=12, fontweight='bold',
+    img_ax.text(v_scale_bar_x - bar_thickness*3, 
+               v_scale_bar_y - segment_height/2, 
+               "10 cm", color='black', fontsize=24, fontweight='bold',
                ha='right', va='center', rotation=90,
-               bbox=dict(facecolor='white', alpha=1.0, pad=3))
+               bbox=dict(facecolor='white', alpha=1.0, pad=4))
     
-    # Add indicator point at grid corner
-    img_ax.plot(corner_x, corner_y, 'o', color='red', markersize=7, zorder=10)
+    # Add 1cm labels at the midpoint of the scale bars
+    img_ax.text(h_scale_bar_x + segment_width/2, 
+               h_scale_bar_y - bar_thickness*2, 
+               "1 cm", color='black', fontsize=16, fontweight='bold',
+               ha='center', va='top', bbox=dict(facecolor='white', alpha=1.0, pad=2))
+    
+    img_ax.text(v_scale_bar_x - bar_thickness*2, 
+               v_scale_bar_y - segment_height/2, 
+               "1 cm", color='black', fontsize=16, fontweight='bold',
+               ha='right', va='center', rotation=90,
+               bbox=dict(facecolor='white', alpha=1.0, pad=2))
+    
+    # Add indicator point at the actual grid corner
+    img_ax.plot(grid_top_left_x, grid_top_left_y, 'o', color='red', markersize=12, zorder=10)
     
     # Get current date
     current_date = datetime.datetime.now().strftime("%Y-%m-%d")
     
-    # Create more compact legend box in top-left corner
-    legend_width = drawing_width_cm * 0.22  # Reduced from 0.3 (30%) to 0.22 (22%)
-    legend_height = legend_width * 0.55  # Reduced proportionally
-    legend_left = left_margin
-    legend_top = total_length_cm - top_margin - legend_height
+    # Move legend inside the grid drawing to conserve paper
+    # Position in top-left corner of the grid drawing
+    legend_width = drawing_width_cm * 0.25  # Slightly smaller to fit better
+    legend_height = legend_width * 0.5
     
-    # Convert to normalized coordinates
-    legend_left_norm = legend_left / total_width_cm
-    legend_top_norm = legend_top / total_length_cm
+    # Convert grid corner pixel coordinates to normalized figure coordinates
+    # We need to transform from pixel coordinates to axis coordinates to figure coordinates
+    grid_corner_axis_x = grid_top_left_x / img_rgb.shape[1]
+    grid_corner_axis_y = grid_top_left_y / img_rgb.shape[0]
+    
+    # Now convert from axis to figure coordinates
+    grid_corner_fig_x = left_margin_norm + (grid_corner_axis_x * width_norm)
+    grid_corner_fig_y = bottom_margin_norm + (grid_corner_axis_y * height_norm)
+    
+    # Position the legend exactly at the grid corner inside the drawing
+    legend_left_norm = grid_corner_fig_x + 0.01  # Slight offset from corner for visibility
+    legend_top_norm = grid_corner_fig_y - 0.01   # Slight offset from corner for visibility
     legend_width_norm = legend_width / total_width_cm
     legend_height_norm = legend_height / total_length_cm
     
-    # Add legend
-    legend_ax = fig.add_axes([legend_left_norm, legend_top_norm, legend_width_norm, legend_height_norm])
+    # Add improved legend - positioned inside the grid drawing
+    legend_ax = fig.add_axes([legend_left_norm, legend_top_norm - legend_height_norm, legend_width_norm, legend_height_norm])
     legend_ax.set_xticks([])
     legend_ax.set_yticks([])
     legend_ax.set_facecolor('white')
-    legend_ax.patch.set_alpha(0.8)
+    legend_ax.patch.set_alpha(0.85)  # Slightly more transparent so grid lines can be seen through it
     
-    # Draw border
+    # Draw stronger border
     for spine in legend_ax.spines.values():
-        spine.set_linewidth(1.5)
+        spine.set_linewidth(1.5)  # Slightly thinner border
         spine.set_edgecolor('black')
     
-    # Add dividing lines
+    # Improved visual organization with better spacing
     num_sections = 7
-    for i in range(1, num_sections):
-        y_pos = i / num_sections
-        legend_ax.axhline(y=y_pos, color='black', linewidth=0.75)
     
-    # Add title and metadata with larger font size
-    legend_ax.text(0.5, 0.93, "GRID LAYOUT METADATA", fontsize=11, weight='bold', ha='center', va='center')
+    # Add header section with different background
+    header_height = 1.0 / num_sections
+    header_rect = Rectangle((0, 1.0 - header_height), 1, header_height,
+                          facecolor='#f0f0f0', edgecolor='black', 
+                          linewidth=1.0, alpha=1.0, zorder=0)
+    legend_ax.add_patch(header_rect)
+    
+    # Add dividing lines with improved styling
+    for i in range(1, num_sections):
+        y_pos = 1.0 - (i / num_sections)
+        legend_ax.axhline(y=y_pos, color='black', linewidth=0.8, alpha=0.7)
+    
+    # Add vertical dividing line to separate labels from values
+    legend_ax.axvline(x=0.4, color='black', linewidth=0.8, alpha=0.5)
+    
+    # Add title with improved styling - smaller font to fit inside grid
+    legend_ax.text(0.5, 0.93, "GRID LAYOUT METADATA", fontsize=16, weight='bold', 
+                 ha='center', va='center', color='#000000')
     
     metadata = [
         ("File", os.path.basename(image_path)),
@@ -305,55 +348,107 @@ def analyze_grid(image_path, paper_width_inches):
         ("Date", current_date)
     ]
     
-    # Add metadata entries with larger font
+    # Add metadata entries with improved styling and positioning - smaller fonts
     for i, (label, value) in enumerate(metadata):
+        # Calculate position with better spacing
         y_pos = 0.93 - ((i + 1) * (0.93 / num_sections))
-        legend_ax.text(0.05, y_pos, f"{label}:", fontsize=9, weight='bold', ha='left', va='center')
-        legend_ax.text(0.5, y_pos, f"{value}", fontsize=9, ha='left', va='center')
+        
+        # More contrast between label and value but smaller font
+        legend_ax.text(0.03, y_pos, f"{label}:", fontsize=12, weight='bold', 
+                     ha='left', va='center', color='#000000')
+        
+        legend_ax.text(0.43, y_pos, f"{value}", fontsize=12, 
+                     ha='left', va='center', color='#000000')
     
-    # Create more compact title block in bottom right corner
-    title_block_width = drawing_width_cm * 0.2  # Reduced from 0.25 to 0.2
-    title_block_height = bottom_margin * 0.85  # Slightly reduced to save space
-    title_left = total_width_cm - right_margin - title_block_width
-    title_bottom = 0.1 * bottom_margin
+    # Add small grid example in the bottom right corner of legend (optional in this compact version)
+    grid_example_size = 0.08
+    grid_example_x = 0.88
+    grid_example_y = 0.07
     
-    # Convert to normalized coordinates
-    title_left_norm = title_left / total_width_cm
-    title_bottom_norm = title_bottom / total_length_cm
+    # Add a small visual grid example
+    for i in range(3):
+        # Horizontal lines
+        legend_ax.axhline(y=grid_example_y + i*grid_example_size/2, 
+                        xmin=1.0 - grid_example_size - 0.02, 
+                        xmax=1.0 - 0.02, 
+                        color='black', linewidth=0.8)
+        # Vertical lines
+        legend_ax.axvline(x=grid_example_x + i*grid_example_size/2, 
+                        ymin=0.02, 
+                        ymax=0.02 + grid_example_size, 
+                        color='black', linewidth=0.8)
+    
+    # Move title block inside the grid at the bottom-right corner of the drawing
+    title_block_width = drawing_width_cm * 0.15  # Smaller to fit inside grid
+    title_block_height = title_block_width * 0.4
+    
+    # Find a position inside the grid, near bottom right
+    # Calculate normalized coordinates for the position:
+    # Find the bottom-right pixel coordinate of the grid
+    grid_bottom_right_axis_x = grid_bottom_right_x / img_rgb.shape[1]
+    grid_bottom_right_axis_y = grid_bottom_right_y / img_rgb.shape[0]
+    
+    # Convert to figure coordinates
+    grid_bottom_right_fig_x = left_margin_norm + (grid_bottom_right_axis_x * width_norm)
+    grid_bottom_right_fig_y = bottom_margin_norm + (grid_bottom_right_axis_y * height_norm)
+    
+    # Position inside the grid
+    title_left_norm = grid_bottom_right_fig_x - (title_block_width / total_width_cm) - 0.01  # Offset from edge
+    title_bottom_norm = grid_bottom_right_fig_y + 0.01  # Slight offset from bottom
     title_width_norm = title_block_width / total_width_cm
     title_height_norm = title_block_height / total_length_cm
     
-    # Add title block
+    # Add title block inside the grid
     title_ax = fig.add_axes([title_left_norm, title_bottom_norm, title_width_norm, title_height_norm])
     title_ax.set_xticks([])
     title_ax.set_yticks([])
+    title_ax.set_facecolor('white')
+    title_ax.patch.set_alpha(0.85)  # Slightly transparent
     
-    # Draw borders and dividing lines
-    title_ax.spines['top'].set_linewidth(1.5)
-    title_ax.spines['right'].set_linewidth(1.5)
-    title_ax.spines['bottom'].set_linewidth(1.5)
-    title_ax.spines['left'].set_linewidth(1.5)
-    title_ax.axhline(y=0.7, color='black', linewidth=1.5)
-    title_ax.axhline(y=0.4, color='black', linewidth=1.5)
-    title_ax.axvline(x=0.5, color='black', linewidth=1.5)
+    # Draw border
+    for spine in title_ax.spines.values():
+        spine.set_linewidth(1.5)
+        spine.set_edgecolor('black')
     
-    # Add text with larger font size
-    title_ax.text(0.5, 0.85, "GRID LAYOUT", fontsize=12, weight='bold', ha='center', va='center')
-    title_ax.text(0.25, 0.55, "Scale:", fontsize=10, ha='center', va='center')
-    title_ax.text(0.75, 0.55, scale_ratio, fontsize=10, ha='center', va='center')
-    title_ax.text(0.25, 0.25, "Date:", fontsize=10, ha='center', va='center')
-    title_ax.text(0.75, 0.25, f"{current_date}", fontsize=10, ha='center', va='center')
+    # Simplified, more readable layout
+    title_ax.axhline(y=0.5, color='black', linewidth=1.0)
+    title_ax.axvline(x=0.5, color='black', linewidth=1.0)
     
-    # Add scale bar (integrated with title block to save space)
-    scale_bar_height = 0.01  # Slightly increased for visibility
-    scale_bar_y = title_bottom_norm - scale_bar_height * 1.8  # Positioned closer to title block
-    scale_bar_ax = fig.add_axes([left_margin_norm, scale_bar_y, width_norm, scale_bar_height])
+    # Add text with clearer organization - smaller font
+    title_ax.text(0.5, 0.75, "GRID LAYOUT", fontsize=14, weight='bold', ha='center', va='center')
+    title_ax.text(0.25, 0.25, "Scale:", fontsize=12, weight='bold', ha='center', va='center')
+    title_ax.text(0.75, 0.25, scale_ratio, fontsize=12, ha='center', va='center')
+    
+    # Add scale bar - keep this outside the grid for better visibility and exact measurement
+    scale_bar_height = 0.012  # Smaller height
+    scale_bar_width = drawing_width_cm  # Exactly match drawing width
+    
+    # Position directly below the drawing, aligned with grid boundaries, much closer to conserve paper
+    scale_bar_left_norm = drawing_left  # Align with left edge of grid
+    scale_bar_bottom_norm = drawing_bottom - (scale_bar_height * 1.2 / total_length_cm)  # Position very close to grid
+    scale_bar_width_norm = width_norm  # Match exactly with grid width
+    scale_bar_height_norm = scale_bar_height / total_length_cm
+    
+    # Create scale bar axis aligned with drawing
+    scale_bar_ax = fig.add_axes([scale_bar_left_norm, scale_bar_bottom_norm, scale_bar_width_norm, scale_bar_height_norm])
     scale_bar_ax.set_xlim(0, 1)
     scale_bar_ax.set_ylim(0, 1)
-    scale_bar_ax.axhline(y=0.5, xmin=0, xmax=1, color='black', linewidth=2)
-    scale_bar_ax.axvline(x=0, ymin=0.25, ymax=0.75, color='black', linewidth=2)
-    scale_bar_ax.axvline(x=1, ymin=0.25, ymax=0.75, color='black', linewidth=2)
-    scale_bar_ax.text(0.5, 0, f"1 meter (EXACT SCALE) - {scale_ratio}", fontsize=10, ha='center', va='bottom')
+    
+    # Create 10 segments for checkered scale bar
+    for i in range(10):
+        color = 'black' if i % 2 == 0 else 'white'
+        segment_width = 0.1
+        scale_bar_ax.axhline(y=0.5, xmin=i*segment_width, xmax=(i+1)*segment_width, 
+                           color=color, linewidth=6)  # Thinner line
+    
+    # Add end caps
+    scale_bar_ax.axvline(x=0, ymin=0.2, ymax=0.8, color='black', linewidth=1.5)  # Thinner line
+    scale_bar_ax.axvline(x=1, ymin=0.2, ymax=0.8, color='black', linewidth=1.5)  # Thinner line
+    
+    # Add text closer to the scale bar for better integration - smaller font
+    scale_bar_ax.text(0.5, 0.1, f"1 meter (EXACT SCALE) - {scale_ratio}", 
+                    fontsize=14, fontweight='bold', ha='center', va='top')  # Smaller font
+    
     scale_bar_ax.set_xticks([])
     scale_bar_ax.set_yticks([])
     scale_bar_ax.spines['top'].set_visible(False)
