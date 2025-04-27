@@ -150,6 +150,10 @@ class ImageViewerApp(tk.Tk):
         self.export_pdf_44_btn = tk.Button(self.control_frame, text="Export 44\" PDF", command=lambda: self.export_to_pdf(44))
         self.export_pdf_44_btn.pack(side=tk.LEFT, padx=5, pady=5)
         
+        # Add batch export button
+        self.batch_export_btn = tk.Button(self.control_frame, text="Batch Export PDFs", command=self.batch_export_pdfs)
+        self.batch_export_btn.pack(side=tk.LEFT, padx=5, pady=5)
+        
         # Create menu
         self.menu_bar = tk.Menu(self)
         self.config(menu=self.menu_bar)
@@ -161,6 +165,7 @@ class ImageViewerApp(tk.Tk):
         self.file_menu.add_separator()
         self.file_menu.add_command(label="Export to PDF (42\")", command=lambda: self.export_to_pdf(42))
         self.file_menu.add_command(label="Export to PDF (44\")", command=lambda: self.export_to_pdf(44))
+        self.file_menu.add_command(label="Batch Export PDFs", command=self.batch_export_pdfs)
         self.file_menu.add_separator()
         self.file_menu.add_command(label="Exit", command=self.quit)
         
@@ -203,6 +208,7 @@ class ImageViewerApp(tk.Tk):
         self.bind("s", lambda event: self.adjust_grid_size())
         self.bind("4", lambda event: self.export_to_pdf(42))  # 42" paper with Ctrl+4
         self.bind("5", lambda event: self.export_to_pdf(44))  # 44" paper with Ctrl+5
+        self.bind("e", lambda event: self.batch_export_pdfs())  # Batch export with 'e'
         self.bind("d", lambda event: self.detect_content())  # Detect content with 'd'
         self.bind("b", lambda event: self.toggle_content_bbox())
     
@@ -459,7 +465,7 @@ class ImageViewerApp(tk.Tk):
     
     def show_about(self):
         about_text = (
-            "Image Viewer with Grid v1.2\n\n"
+            "Image Viewer with Grid v1.3\n\n"
             "A simple application for viewing images in a folder with grid measurement support "
             "and PDF export capabilities.\n\n"
             "Features:\n"
@@ -469,7 +475,9 @@ class ImageViewerApp(tk.Tk):
             "- Support for common image formats\n"
             "- Overlay grid with customizable size\n"
             "- Set image height for accurate measurements (width fixed at 1m)\n"
-            "- Export to PDF with 42\" or 44\" paper width\n\n"
+            "- Export to PDF with 42\" or 44\" paper width\n"
+            "- Batch export PDFs to organized folders\n"
+            "- Content detection and measurements in both metric and imperial units\n\n"
             "Keyboard Shortcuts:\n"
             "- Left/Right arrows: Navigate images\n"
             "- +/-: Zoom in/out\n"
@@ -479,6 +487,7 @@ class ImageViewerApp(tk.Tk):
             "- s: Adjust grid size\n"
             "- 4: Export to PDF (42\")\n"
             "- 5: Export to PDF (44\")\n"
+            "- e: Batch export PDFs\n"
             "- d: Detect content\n"
             "- b: Toggle content bounding box\n\n"
             "Created with Python and Tkinter."
@@ -703,10 +712,18 @@ class ImageViewerApp(tk.Tk):
             messagebox.showinfo("No Image", "Please load an image first")
             return
         
-        # Ask user for save location
+        # Get base file name from current image, without extension
+        if self.current_image:
+            base_filename = os.path.splitext(os.path.basename(self.current_image))[0]
+            default_filename = f"{base_filename}_{paper_width_inches}inch.pdf"
+        else:
+            default_filename = f"export_{paper_width_inches}inch.pdf"
+        
+        # Ask user for save location with default filename
         output_file = filedialog.asksaveasfilename(
             title="Save PDF",
             defaultextension=".pdf",
+            initialfile=default_filename,
             filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
         )
         
@@ -854,10 +871,202 @@ class ImageViewerApp(tk.Tk):
             # Update status
             self.status_var.set(f"PDF exported successfully to {output_file} with {paper_width_inches}\" paper width")
             
+            return output_file  # Return the output file path for batch operations
+            
         except Exception as e:
             messagebox.showerror("Export Error", f"Error creating PDF: {str(e)}")
             import traceback
             traceback.print_exc()
+            return None
+
+    def batch_export_pdfs(self):
+        """Export both 42" and 44" PDFs in one operation, saving to appropriate folders"""
+        if not hasattr(self, 'original_pil_image'):
+            messagebox.showinfo("No Image", "Please load an image first")
+            return
+            
+        # Get base filename from current image, without extension
+        if self.current_image:
+            base_filename = os.path.splitext(os.path.basename(self.current_image))[0]
+        else:
+            base_filename = "export"
+        
+        # Ask user for base filename
+        custom_filename = simpledialog.askstring(
+            "PDF Export Filename", 
+            "Enter base filename for PDF exports:",
+            initialvalue=base_filename
+        )
+        
+        if custom_filename is None:  # User clicked Cancel
+            return
+            
+        # If user entered empty string, use the default base filename
+        if not custom_filename.strip():
+            custom_filename = base_filename
+            
+        # Create folders if they don't exist
+        pdf_42_folder = "pdfs_42inch"
+        pdf_44_folder = "pdfs_44inch"
+        
+        os.makedirs(pdf_42_folder, exist_ok=True)
+        os.makedirs(pdf_44_folder, exist_ok=True)
+        
+        # Prepare filenames
+        filename_42 = os.path.join(pdf_42_folder, f"{custom_filename}_42inch.pdf")
+        filename_44 = os.path.join(pdf_44_folder, f"{custom_filename}_44inch.pdf")
+        
+        # Export 42-inch PDF
+        self._export_pdf_direct(filename_42, 42)
+        
+        # Export 44-inch PDF
+        self._export_pdf_direct(filename_44, 44)
+        
+        # Show success message
+        messagebox.showinfo(
+            "PDF Export Complete", 
+            f"PDFs exported successfully:\n\n"
+            f"42\" PDF: {filename_42}\n"
+            f"44\" PDF: {filename_44}"
+        )
+        
+        # Update status
+        self.status_var.set(f"PDFs exported: {os.path.basename(filename_42)} and {os.path.basename(filename_44)}")
+    
+    def _export_pdf_direct(self, output_file, paper_width_inches):
+        """Export PDF directly to the specified file (no file dialog)"""
+        try:
+            # Calculate dimensions
+            paper_width_m = (paper_width_inches * 2.54) / 100
+            img_width, img_height = self.original_pil_image.size
+            paper_height_inches = paper_width_inches * (self.image_height_m / self.image_width_m)
+            
+            # Create a PDF with the specified paper size
+            c = canvas.Canvas(output_file, pagesize=(paper_width_inches * inch, paper_height_inches * inch))
+            
+            # Save original image to a temporary file
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_file:
+                temp_filename = temp_file.name
+                self.original_pil_image.save(temp_filename, format="PNG")
+            
+            # Draw the image on the PDF, scaling to fit the page
+            c.drawImage(
+                temp_filename, 
+                0,
+                0,
+                width=paper_width_inches * inch,
+                height=paper_height_inches * inch,
+                preserveAspectRatio=True
+            )
+            
+            # Add grid if enabled
+            if self.show_grid:
+                # Calculate grid spacing in points (1/72 of an inch)
+                grid_spacing_x = (paper_width_inches * inch) / (self.image_width_m / self.grid_size)
+                grid_spacing_y = (paper_height_inches * inch) / (self.image_height_m / self.grid_size)
+                
+                # Set grid line color and width
+                c.setStrokeColorRGB(0.27, 0.27, 0.27)  # Dark gray (equivalent to #444444)
+                
+                # Draw vertical grid lines
+                for x in range(0, int(paper_width_inches * inch) + 1, int(grid_spacing_x)):
+                    # Thicker lines for major grid lines (0.5m and 1.0m)
+                    x_meters = (x / (paper_width_inches * inch)) * self.image_width_m
+                    
+                    if abs(x_meters % 0.5) < 0.01:
+                        c.setLineWidth(2.5)  # Thicker line for major grid lines
+                    else:
+                        c.setLineWidth(1.0)  # Thicker line for minor grid lines
+                        
+                    c.line(x, 0, x, paper_height_inches * inch)
+                    
+                    # Add labels for major grid lines with larger font
+                    if abs(x_meters % 0.5) < 0.01:
+                        c.setFont("Helvetica-Bold", 12)  # Larger, bold font
+                        c.drawString(x + 4, 12, f"{x_meters:.1f}m")
+                
+                # Draw horizontal grid lines
+                for y in range(0, int(paper_height_inches * inch) + 1, int(grid_spacing_y)):
+                    # Thicker lines for major grid lines (0.5m and 1.0m)
+                    y_meters = (y / (paper_height_inches * inch)) * self.image_height_m
+                    
+                    if abs(y_meters % 0.5) < 0.01:
+                        c.setLineWidth(2.5)  # Thicker line for major grid lines
+                    else:
+                        c.setLineWidth(1.0)  # Thicker line for minor grid lines
+                        
+                    c.line(0, y, paper_width_inches * inch, y)
+                    
+                    # Add labels for major grid lines with larger font
+                    if abs(y_meters % 0.5) < 0.01:
+                        c.setFont("Helvetica-Bold", 12)  # Larger, bold font
+                        c.drawString(4, y + 14, f"{y_meters:.1f}m")
+                
+                # Draw 10cm scale bar in the top left corner
+                scale_bar_length = grid_spacing_x  # 10cm in pixels
+                scale_bar_x = 50  # Offset from left edge
+                scale_bar_y = 50  # Offset from top edge
+                
+                # Draw white outline for the scale bar (for visibility)
+                c.setStrokeColorRGB(1, 1, 1)  # White
+                c.setLineWidth(7)
+                c.line(scale_bar_x, scale_bar_y, scale_bar_x + scale_bar_length, scale_bar_y)
+                c.line(scale_bar_x, scale_bar_y, scale_bar_x, scale_bar_y + scale_bar_length)
+                
+                # Draw the actual scale bar
+                c.setStrokeColorRGB(0.27, 0.27, 0.27)  # Dark gray
+                c.setLineWidth(5)
+                c.line(scale_bar_x, scale_bar_y, scale_bar_x + scale_bar_length, scale_bar_y)
+                c.line(scale_bar_x, scale_bar_y, scale_bar_x, scale_bar_y + scale_bar_length)
+                
+                # Add scale bar labels with white outline effect
+                c.setFillColorRGB(1, 1, 1)  # White
+                c.setFont("Helvetica-Bold", 14)
+                for offset_x, offset_y in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                    c.drawString(scale_bar_x + scale_bar_length/2 - 20 + offset_x, 
+                                scale_bar_y - 18 + offset_y, "10 cm")
+                
+                # Draw horizontal label
+                c.setFillColorRGB(0.27, 0.27, 0.27)  # Dark gray
+                c.setFont("Helvetica-Bold", 14)
+                c.drawString(scale_bar_x + scale_bar_length/2 - 20, scale_bar_y - 18, "10 cm")
+                
+                # Vertical label white outline
+                c.setFillColorRGB(1, 1, 1)  # White
+                c.saveState()
+                c.translate(scale_bar_x - 18, scale_bar_y + scale_bar_length/2)
+                c.rotate(90)
+                for offset_x, offset_y in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                    c.drawString(offset_x, offset_y, "10 cm")
+                c.restoreState()
+                
+                # Draw vertical label
+                c.setFillColorRGB(0.27, 0.27, 0.27)  # Dark gray
+                c.saveState()
+                c.translate(scale_bar_x - 18, scale_bar_y + scale_bar_length/2)
+                c.rotate(90)
+                c.drawString(0, 0, "10 cm")
+                c.restoreState()
+            
+            # Add metadata to the PDF
+            c.setTitle(f"Image: {os.path.basename(self.current_image)}")
+            c.setAuthor("Image Viewer with Grid")
+            c.setSubject(f"Dimensions: 1.00m × {self.image_height_m:.2f}m, Paper: {paper_width_inches}\" wide")
+            
+            # Save the PDF
+            c.showPage()
+            c.save()
+            
+            # Delete temporary file
+            os.unlink(temp_filename)
+            
+            return True
+            
+        except Exception as e:
+            messagebox.showerror("Export Error", f"Error creating PDF {output_file}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
 
     def detect_content(self):
         """Detect the main content in the image using OpenCV image processing"""
