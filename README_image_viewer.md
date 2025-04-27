@@ -1,6 +1,6 @@
-# Image Viewer with Grid Measurement
+# Image Viewer with Grid Measurement and PDF Export
 
-A lightweight application for browsing through images in a folder with basic navigation, zoom functionality, and grid measurement support.
+A lightweight application for browsing through images in a folder with basic navigation, zoom functionality, grid measurement support, and PDF export capabilities.
 
 ## Features
 
@@ -11,13 +11,14 @@ A lightweight application for browsing through images in a folder with basic nav
 - Grid overlay for measurements
 - Set image height for accurate scaling (width fixed at 1m)
 - Adjustable grid size (default 10cm x 10cm)
+- Export to PDF with 42" or 44" paper width
 - Simple and clean interface
 
 ## How to Use
 
 1. **Installation**:
    ```
-   pip install pillow numpy
+   pip install pillow numpy reportlab
    ```
 
 2. **Run the application**:
@@ -46,6 +47,12 @@ A lightweight application for browsing through images in a folder with basic nav
    - Click "Adjust Grid Size" or press "s" to change the grid spacing
    - Default grid size is 10cm x 10cm (0.1m)
 
+7. **PDF Export**:
+   - Click "Export 42\" PDF" or press "4" to export with 42-inch paper width
+   - Click "Export 44\" PDF" or press "5" to export with 44-inch paper width
+   - The PDF will be scaled properly to maintain the 1m width standard
+   - Grid lines will be included in the PDF if the grid is enabled
+
 ## Keyboard Shortcuts
 
 - **Left Arrow**: Previous image
@@ -56,12 +63,15 @@ A lightweight application for browsing through images in a folder with basic nav
 - **g**: Toggle grid
 - **h**: Set image height
 - **s**: Adjust grid size
+- **4**: Export to PDF (42" width)
+- **5**: Export to PDF (44" width)
 
 ## Requirements
 
 - Python 3.6+
 - Pillow (PIL Fork)
 - NumPy
+- ReportLab
 - Tkinter (included with standard Python installation)
 
 ## License

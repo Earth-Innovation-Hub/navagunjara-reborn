@@ -6,6 +6,10 @@ import os
 import re
 import numpy as np
 import math
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import inch
+from reportlab.lib.pagesizes import landscape
+import tempfile
 
 class ImageViewerApp(tk.Tk):
     def __init__(self):
@@ -129,6 +133,13 @@ class ImageViewerApp(tk.Tk):
         self.adjust_grid_btn = tk.Button(self.control_frame, text="Adjust Grid Size", command=self.adjust_grid_size)
         self.adjust_grid_btn.pack(side=tk.LEFT, padx=5, pady=5)
         
+        # Add PDF export controls
+        self.export_pdf_42_btn = tk.Button(self.control_frame, text="Export 42\" PDF", command=lambda: self.export_to_pdf(42))
+        self.export_pdf_42_btn.pack(side=tk.LEFT, padx=5, pady=5)
+        
+        self.export_pdf_44_btn = tk.Button(self.control_frame, text="Export 44\" PDF", command=lambda: self.export_to_pdf(44))
+        self.export_pdf_44_btn.pack(side=tk.LEFT, padx=5, pady=5)
+        
         # Create menu
         self.menu_bar = tk.Menu(self)
         self.config(menu=self.menu_bar)
@@ -137,6 +148,9 @@ class ImageViewerApp(tk.Tk):
         self.file_menu = tk.Menu(self.menu_bar, tearoff=0)
         self.menu_bar.add_cascade(label="File", menu=self.file_menu)
         self.file_menu.add_command(label="Open Folder", command=self.open_folder)
+        self.file_menu.add_separator()
+        self.file_menu.add_command(label="Export to PDF (42\")", command=lambda: self.export_to_pdf(42))
+        self.file_menu.add_command(label="Export to PDF (44\")", command=lambda: self.export_to_pdf(44))
         self.file_menu.add_separator()
         self.file_menu.add_command(label="Exit", command=self.quit)
         
@@ -174,6 +188,8 @@ class ImageViewerApp(tk.Tk):
         self.bind("g", lambda event: self.toggle_grid())
         self.bind("h", lambda event: self.set_image_height())
         self.bind("s", lambda event: self.adjust_grid_size())
+        self.bind("4", lambda event: self.export_to_pdf(42))  # 42" paper with Ctrl+4
+        self.bind("5", lambda event: self.export_to_pdf(44))  # 44" paper with Ctrl+5
     
     def on_canvas_press(self, event):
         """Handle mouse button press on canvas"""
@@ -380,22 +396,26 @@ class ImageViewerApp(tk.Tk):
     
     def show_about(self):
         about_text = (
-            "Image Viewer with Grid v1.1\n\n"
-            "A simple application for viewing images in a folder with grid measurement support.\n\n"
+            "Image Viewer with Grid v1.2\n\n"
+            "A simple application for viewing images in a folder with grid measurement support "
+            "and PDF export capabilities.\n\n"
             "Features:\n"
             "- Browse through all images in a folder\n"
             "- Zoom in/out and pan around images\n"
             "- Keyboard shortcuts for navigation\n"
             "- Support for common image formats\n"
             "- Overlay grid with customizable size\n"
-            "- Set image height for accurate measurements (width fixed at 1m)\n\n"
+            "- Set image height for accurate measurements (width fixed at 1m)\n"
+            "- Export to PDF with 42\" or 44\" paper width\n\n"
             "Keyboard Shortcuts:\n"
             "- Left/Right arrows: Navigate images\n"
             "- +/-: Zoom in/out\n"
             "- r: Reset zoom\n"
             "- g: Toggle grid\n"
             "- h: Set image height\n"
-            "- s: Adjust grid size\n\n"
+            "- s: Adjust grid size\n"
+            "- 4: Export to PDF (42\")\n"
+            "- 5: Export to PDF (44\")\n\n"
             "Created with Python and Tkinter."
         )
         messagebox.showinfo("About", about_text)
@@ -552,6 +572,117 @@ class ImageViewerApp(tk.Tk):
             
             y += grid_spacing_y
             line_count += 1
+
+    def export_to_pdf(self, paper_width_inches):
+        """Export current image to PDF with specified paper width"""
+        if not hasattr(self, 'original_pil_image'):
+            messagebox.showinfo("No Image", "Please load an image first")
+            return
+        
+        # Ask user for save location
+        output_file = filedialog.asksaveasfilename(
+            title="Save PDF",
+            defaultextension=".pdf",
+            filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
+        )
+        
+        if not output_file:
+            return  # User cancelled
+        
+        try:
+            # Calculate dimensions
+            # Convert paper width from inches to meters
+            paper_width_m = (paper_width_inches * 2.54) / 100
+            
+            # Calculate the aspect ratio of the image
+            img_width, img_height = self.original_pil_image.size
+            aspect_ratio = img_height / img_width
+            
+            # Calculate paper height in inches based on aspect ratio and fixed 1m width
+            # We keep the width at 1m in our model, so scale paper height accordingly
+            paper_height_inches = paper_width_inches * (self.image_height_m / self.image_width_m)
+            
+            # Create a PDF with the specified paper size
+            c = canvas.Canvas(output_file, pagesize=(paper_width_inches * inch, paper_height_inches * inch))
+            
+            # Save original image to a temporary file
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_file:
+                temp_filename = temp_file.name
+                self.original_pil_image.save(temp_filename, format="PNG")
+            
+            # Draw the image on the PDF, scaling to fit the page
+            # No padding beyond what's needed for metric correctness
+            c.drawImage(
+                temp_filename, 
+                0,  # x position (no padding)
+                0,  # y position (no padding)
+                width=paper_width_inches * inch,
+                height=paper_height_inches * inch,
+                preserveAspectRatio=True
+            )
+            
+            # Add grid if enabled
+            if self.show_grid:
+                # Calculate grid spacing in points (1/72 of an inch)
+                grid_spacing_x = (paper_width_inches * inch) / (self.image_width_m / self.grid_size)
+                grid_spacing_y = (paper_height_inches * inch) / (self.image_height_m / self.grid_size)
+                
+                # Set grid line color and width
+                c.setStrokeColorRGB(0, 0.8, 0.8)  # Cyan color
+                
+                # Draw vertical grid lines
+                for x in range(0, int(paper_width_inches * inch) + 1, int(grid_spacing_x)):
+                    # Thicker lines for major grid lines (0.5m and 1.0m)
+                    x_meters = (x / (paper_width_inches * inch)) * self.image_width_m
+                    
+                    if abs(x_meters % 0.5) < 0.01:
+                        c.setLineWidth(1.5)  # Thicker line for major grid lines
+                    else:
+                        c.setLineWidth(0.5)  # Thinner line for minor grid lines
+                        
+                    c.line(x, 0, x, paper_height_inches * inch)
+                    
+                    # Add labels for major grid lines
+                    if abs(x_meters % 0.5) < 0.01:
+                        c.setFont("Helvetica", 8)
+                        c.drawString(x + 2, 10, f"{x_meters:.1f}m")
+                
+                # Draw horizontal grid lines
+                for y in range(0, int(paper_height_inches * inch) + 1, int(grid_spacing_y)):
+                    # Thicker lines for major grid lines (0.5m and 1.0m)
+                    y_meters = (y / (paper_height_inches * inch)) * self.image_height_m
+                    
+                    if abs(y_meters % 0.5) < 0.01:
+                        c.setLineWidth(1.5)  # Thicker line for major grid lines
+                    else:
+                        c.setLineWidth(0.5)  # Thinner line for minor grid lines
+                        
+                    c.line(0, y, paper_width_inches * inch, y)
+                    
+                    # Add labels for major grid lines
+                    if abs(y_meters % 0.5) < 0.01:
+                        c.setFont("Helvetica", 8)
+                        c.drawString(2, y + 10, f"{y_meters:.1f}m")
+            
+            # Add metadata to the PDF
+            c.setTitle(f"Image: {os.path.basename(self.current_image)}")
+            c.setAuthor("Image Viewer with Grid")
+            c.setSubject(f"Dimensions: 1.00m × {self.image_height_m:.2f}m, Paper: {paper_width_inches}\" wide")
+            
+            # Save the PDF
+            c.showPage()
+            c.save()
+            
+            # Delete temporary file
+            os.unlink(temp_filename)
+            
+            # Update status
+            self.status_var.set(f"PDF exported successfully to {output_file} with {paper_width_inches}\" paper width")
+            
+        except Exception as e:
+            messagebox.showerror("Export Error", f"Error creating PDF: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
 def main():
     app = ImageViewerApp()
