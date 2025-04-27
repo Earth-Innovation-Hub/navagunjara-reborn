@@ -1,17 +1,38 @@
-# Grid Vision: Architectural Grid Analysis & PDF Generator
+# Architectural Grid & Drawing Tools
 
+This repository contains specialized tools for architectural drawing preparation, focusing on grid pattern analysis and PDF generation for large-format printing.
 
-This project demonstrates practical applications of computer vision in architectural and design workflows. It uses OpenCV and image processing techniques to analyze grid patterns in images and generate precise, scaled PDF outputs for professional printing.
+## Tools Included
 
-## Learning Objectives
+### 1. Grid Vision: Architectural Grid Analysis
 
-- Understand fundamental computer vision techniques for feature detection
-- Learn how to extract geometric information from images
-- Apply image processing techniques to real-world design problems
-- Understand scale conversion between digital and physical dimensions
-- Explore automation of technical drawing preparation
+An image processing tool that automatically detects grid patterns in architectural renderings and generates precisely scaled PDFs with a fixed 1-meter width.
 
-## How It Works: The Computer Vision Pipeline
+### 2. PDF Metadata Generator
+
+A user-friendly GUI application that creates properly scaled and formatted PDFs for wide-format printing, with consistent 1-meter width and embedded metadata blocks.
+
+## Features
+
+### Grid Vision Tool
+- Automatic detection of grid cells using computer vision techniques
+- Precise scaling to exactly 1-meter width for accurate printing
+- Support for both 42-inch and 44-inch paper rolls
+- Automatic PDF generation with proper scaling
+- Statistical validation of measurements for accuracy
+
+### PDF Metadata Generator
+- User-friendly graphical interface for easy interaction
+- Fixed 1.0m width for consistent scaling
+- Automatic generation of PDFs for both 42-inch and 44-inch paper sizes
+- Creation of metadata blocks in the top-left corner of PDFs
+- Organization of output files in separate folders by paper size
+- Image preview with zoom capabilities
+- Batch processing support for multiple images
+
+## How It Works
+
+### Grid Vision: Computer Vision Pipeline
 
 This tool implements a complete computer vision pipeline to analyze grid images:
 
@@ -37,53 +58,50 @@ This tool implements a complete computer vision pipeline to analyze grid images:
    - Precise scaling calculations to ensure 1:1 physical accuracy
    - Aspect ratio preservation and orientation optimization
 
-5. **Visualization & Output Generation**
-   - Creation of precisely scaled PDFs using Matplotlib
-   - Addition of measurement references and scale bars
-   - Metadata integration for documentation purposes
+### PDF Metadata Generator: Workflow
 
-## Technical Concepts Explained
+The PDF Metadata Generator provides a more interactive approach:
 
-### Hough Line Transform
-The code implements the probabilistic Hough Transform to detect lines in the binarized image. This algorithm works by:
-1. Transforming points in image space to lines in Hough space
-2. Finding peaks in the accumulator matrix to identify the most likely line parameters
-3. Converting back to get line endpoints in the original image
+1. **Image Loading & Visualization**
+   - Select individual images or entire directories
+   - Preview with zoom and navigation controls
+   - Automatic extraction of image dimensions
 
-### Morphological Operations
-The script uses morphological closing to improve line detection:
-```python
-kernel = np.ones((5,5), np.uint8)
-closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
-```
-This helps connect small gaps in the detected grid lines before applying edge detection.
+2. **Dimension & Metadata Specification**
+   - Fixed 1.0m width for standard measurement
+   - Input height in meters
+   - Name specification for the object being rendered
 
-### Statistical Validation
-To ensure measurement accuracy, the code implements statistical validation:
-```python
-h_std = np.std(horizontal_spacings)
-v_std = np.std(vertical_spacings)
-h_mean = np.mean(horizontal_spacings)
-v_mean = np.mean(vertical_spacings)
-h_cv = h_std / h_mean if h_mean > 0 else 0
-v_cv = v_std / v_mean if v_mean > 0 else 0
-```
-This identifies inconsistencies in grid spacing that could affect measurement precision.
+3. **PDF Generation**
+   - Automatic creation of PDFs for both 42-inch and 44-inch paper
+   - Proper scaling to maintain aspect ratio
+   - Centered positioning on the paper
+   - Addition of metadata block in the top-left corner of the PDF
 
-## Usage
+4. **Output Organization**
+   - Separate directories for 42-inch and 44-inch paper sizes
+   - Consistent naming conventions for easy reference
+   - Generation of metadata text files with comprehensive information
 
-### Requirements
+## Requirements
+
 - Python 3.6+
 - OpenCV (`opencv-python`)
 - NumPy
 - Matplotlib
+- Pillow (PIL)
+- ReportLab (for PDF generation)
+- Tkinter (for GUI application)
 
 Install dependencies:
 ```bash
-pip install opencv-python numpy matplotlib
+pip install -r requirements.txt
 ```
 
-### Running the Tool
+## Usage
+
+### Grid Vision Tool
+
 1. Place your grid PNG images in the same directory as the script
 2. Run the script:
 ```bash
@@ -91,11 +109,28 @@ python extract-grid-size.py
 ```
 3. PDFs will be generated in a subfolder named "PDFs"
 
-### Expected Outputs
-- Precisely scaled PDFs with 1-meter drawing width
-- Versions for both 42-inch and 44-inch paper widths
-- Scale bars and measurement references
-- Metadata legend with file information and scale details
+### PDF Metadata Generator
+
+1. Launch the GUI application:
+```bash
+python pdf_metadata_gui.py
+```
+
+2. Use the application:
+   - Open an image or directory of images using the File menu
+   - Navigate between images using Previous/Next buttons or arrow keys
+   - Enter the height in meters (width is fixed at 1.0m)
+   - Enter a name for the object (optional)
+   - Click "Generate PDFs for both paper sizes"
+   - Generated PDFs will be saved in "PDFs/42inch_prints" and "PDFs/44inch_prints"
+
+## Workflow Integration
+
+These tools can be used separately or together in a workflow:
+
+1. For images with clear grid patterns, use the **Grid Vision** tool for automatic analysis and PDF generation
+2. For other orthographic renderings without grids, use the **PDF Metadata Generator** to manually specify dimensions and create properly scaled PDFs
+3. Both tools ensure outputs are properly scaled with a consistent 1-meter width for professional printing
 
 ## Learning Extensions
 
