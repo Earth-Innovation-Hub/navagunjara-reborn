@@ -507,13 +507,13 @@ class ImageViewerApp(tk.Tk):
         while x <= x_position + img_width:
             # Make the 0.5m and 1.0m lines more visible
             if abs(line_count * self.grid_size % 0.5) < 0.001:  # Every 0.5m
-                width = 2
+                width = 3  # Make thicker
                 fill_color = self.grid_color
             elif abs(line_count * self.grid_size % 0.1) < 0.001:  # Every 0.1m
-                width = 1
+                width = 1.5  # Make thicker
                 fill_color = self.grid_color
             else:
-                width = 0.5
+                width = 1  # Make thicker
                 fill_color = "#AAAAAA"  # Light gray
                 
             self.canvas.create_line(
@@ -521,17 +521,17 @@ class ImageViewerApp(tk.Tk):
                 x, y_position + img_height, 
                 fill=fill_color, 
                 width=width, 
-                dash=(4, 4) if width < 2 else None
+                dash=(4, 4) if width < 3 else None
             )
             
-            # Add label every 0.5m
+            # Add label every 0.5m with larger font
             if abs(line_count * self.grid_size % 0.5) < 0.001:
                 self.canvas.create_text(
-                    x, y_position - 5,
+                    x, y_position - 10,
                     text=f"{line_count * self.grid_size:.1f}m",
                     anchor=tk.S,
                     fill=self.grid_color,
-                    font=('Arial', 8)
+                    font=('Arial', 12, 'bold')  # Larger, bold font
                 )
             
             x += grid_spacing_x
@@ -543,13 +543,13 @@ class ImageViewerApp(tk.Tk):
         while y <= y_position + img_height:
             # Make the 0.5m and 1.0m lines more visible
             if abs(line_count * self.grid_size % 0.5) < 0.001:  # Every 0.5m
-                width = 2
+                width = 3  # Make thicker
                 fill_color = self.grid_color
             elif abs(line_count * self.grid_size % 0.1) < 0.001:  # Every 0.1m
-                width = 1
+                width = 1.5  # Make thicker
                 fill_color = self.grid_color
             else:
-                width = 0.5
+                width = 1  # Make thicker
                 fill_color = "#AAAAAA"  # Light gray
                 
             self.canvas.create_line(
@@ -557,21 +557,93 @@ class ImageViewerApp(tk.Tk):
                 x_position + img_width, y, 
                 fill=fill_color, 
                 width=width, 
-                dash=(4, 4) if width < 2 else None
+                dash=(4, 4) if width < 3 else None
             )
             
-            # Add label every 0.5m
+            # Add label every 0.5m with larger font
             if abs(line_count * self.grid_size % 0.5) < 0.001:
                 self.canvas.create_text(
-                    x_position - 5, y,
+                    x_position - 10, y,
                     text=f"{line_count * self.grid_size:.1f}m",
                     anchor=tk.E,
                     fill=self.grid_color,
-                    font=('Arial', 8)
+                    font=('Arial', 12, 'bold')  # Larger, bold font
                 )
             
             y += grid_spacing_y
             line_count += 1
+            
+        # Draw 10cm scale bar in the top left corner
+        scale_bar_length = grid_spacing_x  # 10cm in pixels
+        scale_bar_x = x_position + 40  # Offset from left edge
+        scale_bar_y = y_position + 40  # Offset from top edge
+        
+        # Draw white outline for the scale bar (for visibility)
+        self.canvas.create_line(
+            scale_bar_x, scale_bar_y, 
+            scale_bar_x + scale_bar_length, scale_bar_y, 
+            fill="#FFFFFF",  # White outline for visibility
+            width=7
+        )
+        self.canvas.create_line(
+            scale_bar_x, scale_bar_y, 
+            scale_bar_x, scale_bar_y + scale_bar_length, 
+            fill="#FFFFFF",  # White outline for visibility
+            width=7
+        )
+        
+        # Draw the actual scale bar
+        self.canvas.create_line(
+            scale_bar_x, scale_bar_y, 
+            scale_bar_x + scale_bar_length, scale_bar_y, 
+            fill=self.grid_color,
+            width=5
+        )
+        self.canvas.create_line(
+            scale_bar_x, scale_bar_y, 
+            scale_bar_x, scale_bar_y + scale_bar_length, 
+            fill=self.grid_color,
+            width=5
+        )
+        
+        # Add scale bar labels with white outline effect
+        # First draw white outline for horizontal label
+        self.canvas.create_text(
+            scale_bar_x + scale_bar_length/2, scale_bar_y - 15,
+            text="10 cm",
+            anchor=tk.S,
+            fill="#FFFFFF",  # White outline for visibility
+            font=('Arial', 14, 'bold')
+        )
+        
+        # Draw horizontal label
+        self.canvas.create_text(
+            scale_bar_x + scale_bar_length/2, scale_bar_y - 15,
+            text="10 cm",
+            anchor=tk.S,
+            fill=self.grid_color,
+            font=('Arial', 14, 'bold')
+        )
+        
+        # First draw white outline for vertical label
+        self.canvas.create_text(
+            scale_bar_x - 15, scale_bar_y + scale_bar_length/2,
+            text="10 cm",
+            anchor=tk.E,
+            angle=90,  # Rotate text for vertical label
+            fill="#FFFFFF",  # White outline for visibility
+            font=('Arial', 14, 'bold')
+        )
+        
+        # Draw vertical label
+        self.canvas.create_text(
+            scale_bar_x - 15, scale_bar_y + scale_bar_length/2,
+            text="10 cm",
+            anchor=tk.E,
+            angle=90,  # Rotate text for vertical label
+            fill=self.grid_color,
+            font=('Arial', 14, 'bold')
+        )
 
     def export_to_pdf(self, paper_width_inches):
         """Export current image to PDF with specified paper width"""
@@ -636,16 +708,16 @@ class ImageViewerApp(tk.Tk):
                     x_meters = (x / (paper_width_inches * inch)) * self.image_width_m
                     
                     if abs(x_meters % 0.5) < 0.01:
-                        c.setLineWidth(1.5)  # Thicker line for major grid lines
+                        c.setLineWidth(2.5)  # Thicker line for major grid lines
                     else:
-                        c.setLineWidth(0.5)  # Thinner line for minor grid lines
+                        c.setLineWidth(1.0)  # Thicker line for minor grid lines
                         
                     c.line(x, 0, x, paper_height_inches * inch)
                     
-                    # Add labels for major grid lines
+                    # Add labels for major grid lines with larger font
                     if abs(x_meters % 0.5) < 0.01:
-                        c.setFont("Helvetica", 8)
-                        c.drawString(x + 2, 10, f"{x_meters:.1f}m")
+                        c.setFont("Helvetica-Bold", 12)  # Larger, bold font
+                        c.drawString(x + 4, 12, f"{x_meters:.1f}m")
                 
                 # Draw horizontal grid lines
                 for y in range(0, int(paper_height_inches * inch) + 1, int(grid_spacing_y)):
@@ -653,16 +725,67 @@ class ImageViewerApp(tk.Tk):
                     y_meters = (y / (paper_height_inches * inch)) * self.image_height_m
                     
                     if abs(y_meters % 0.5) < 0.01:
-                        c.setLineWidth(1.5)  # Thicker line for major grid lines
+                        c.setLineWidth(2.5)  # Thicker line for major grid lines
                     else:
-                        c.setLineWidth(0.5)  # Thinner line for minor grid lines
+                        c.setLineWidth(1.0)  # Thicker line for minor grid lines
                         
                     c.line(0, y, paper_width_inches * inch, y)
                     
-                    # Add labels for major grid lines
+                    # Add labels for major grid lines with larger font
                     if abs(y_meters % 0.5) < 0.01:
-                        c.setFont("Helvetica", 8)
-                        c.drawString(2, y + 10, f"{y_meters:.1f}m")
+                        c.setFont("Helvetica-Bold", 12)  # Larger, bold font
+                        c.drawString(4, y + 14, f"{y_meters:.1f}m")
+                
+                # Draw 10cm scale bar in the top left corner
+                scale_bar_length = grid_spacing_x  # 10cm in pixels
+                scale_bar_x = 50  # Offset from left edge
+                scale_bar_y = 50  # Offset from top edge
+                
+                # Draw white outline for the scale bar (for visibility)
+                c.setStrokeColorRGB(1, 1, 1)  # White
+                c.setLineWidth(7)
+                
+                # Horizontal and vertical white outline
+                c.line(scale_bar_x, scale_bar_y, scale_bar_x + scale_bar_length, scale_bar_y)
+                c.line(scale_bar_x, scale_bar_y, scale_bar_x, scale_bar_y + scale_bar_length)
+                
+                # Draw the actual scale bar
+                c.setStrokeColorRGB(0, 0.8, 0.8)  # Cyan
+                c.setLineWidth(5)
+                
+                # Horizontal and vertical lines
+                c.line(scale_bar_x, scale_bar_y, scale_bar_x + scale_bar_length, scale_bar_y)
+                c.line(scale_bar_x, scale_bar_y, scale_bar_x, scale_bar_y + scale_bar_length)
+                
+                # Add scale bar labels with white outline effect
+                # First draw white outline for horizontal label
+                c.setFillColorRGB(1, 1, 1)  # White
+                c.setFont("Helvetica-Bold", 14)
+                for offset_x, offset_y in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                    c.drawString(scale_bar_x + scale_bar_length/2 - 20 + offset_x, 
+                                scale_bar_y - 18 + offset_y, "10 cm")
+                
+                # Draw horizontal label
+                c.setFillColorRGB(0, 0.8, 0.8)  # Cyan
+                c.setFont("Helvetica-Bold", 14)
+                c.drawString(scale_bar_x + scale_bar_length/2 - 20, scale_bar_y - 18, "10 cm")
+                
+                # First draw white outline for vertical label
+                c.setFillColorRGB(1, 1, 1)  # White
+                c.saveState()
+                c.translate(scale_bar_x - 18, scale_bar_y + scale_bar_length/2)
+                c.rotate(90)
+                for offset_x, offset_y in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                    c.drawString(offset_x, offset_y, "10 cm")
+                c.restoreState()
+                
+                # Draw vertical label
+                c.setFillColorRGB(0, 0.8, 0.8)  # Cyan
+                c.saveState()
+                c.translate(scale_bar_x - 18, scale_bar_y + scale_bar_length/2)
+                c.rotate(90)
+                c.drawString(0, 0, "10 cm")
+                c.restoreState()
             
             # Add metadata to the PDF
             c.setTitle(f"Image: {os.path.basename(self.current_image)}")

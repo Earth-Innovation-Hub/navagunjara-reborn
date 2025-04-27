@@ -8,7 +8,8 @@ A lightweight application for browsing through images in a folder with basic nav
 - Supports common image formats (PNG, JPG, JPEG, BMP, GIF, TIFF)
 - Zoom in/out and pan around images
 - Keyboard shortcuts for easy navigation
-- Grid overlay for measurements
+- Grid overlay for measurements with prominent 10cm scale bar
+- High visibility grid with thicker lines and larger, bold labels
 - Set image height for accurate scaling (width fixed at 1m)
 - Adjustable grid size (default 10cm x 10cm)
 - Export to PDF with 42" or 44" paper width
