@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageFilter
 import os
 import re
 import numpy as np
 import math
+import cv2  # OpenCV for image processing
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
 from reportlab.lib.pagesizes import landscape
@@ -34,11 +35,16 @@ class ImageViewerApp(tk.Tk):
         self.max_zoom = 5.0
         
         # Grid variables
-        self.show_grid = False
-        self.grid_size = 0.1  # Default grid size in meters (10cm)
+        self.show_grid = True
+        self.grid_size = 0.1  # Default grid size in meters
         self.image_height_m = 1.0  # Default height in meters
         self.image_width_m = 1.0  # Fixed width in meters
-        self.grid_color = "#00FFFF"  # Cyan for grid lines
+        self.grid_color = "#444444"  # Dark gray for grid lines (changed from cyan)
+        
+        # Content detection variables
+        self.content_bbox = None  # Bounding box for detected content (x1, y1, x2, y2)
+        self.show_content_bbox = False  # Whether to show the content bounding box
+        self.content_bbox_color = "#FF4444"  # Red color for content bounding box
         
         # Status bar
         self.status_var = tk.StringVar()
@@ -133,6 +139,10 @@ class ImageViewerApp(tk.Tk):
         self.adjust_grid_btn = tk.Button(self.control_frame, text="Adjust Grid Size", command=self.adjust_grid_size)
         self.adjust_grid_btn.pack(side=tk.LEFT, padx=5, pady=5)
         
+        # Add content detection button
+        self.detect_content_btn = tk.Button(self.control_frame, text="Detect Content", command=self.detect_content)
+        self.detect_content_btn.pack(side=tk.LEFT, padx=5, pady=5)
+        
         # Add PDF export controls
         self.export_pdf_42_btn = tk.Button(self.control_frame, text="Export 42\" PDF", command=lambda: self.export_to_pdf(42))
         self.export_pdf_42_btn.pack(side=tk.LEFT, padx=5, pady=5)
@@ -164,6 +174,9 @@ class ImageViewerApp(tk.Tk):
         self.view_menu.add_checkbutton(label="Show Grid", command=self.toggle_grid, variable=tk.BooleanVar(value=self.show_grid))
         self.view_menu.add_command(label="Set Image Height", command=self.set_image_height)
         self.view_menu.add_command(label="Adjust Grid Size", command=self.adjust_grid_size)
+        self.view_menu.add_separator()
+        self.view_menu.add_command(label="Detect Content", command=self.detect_content)
+        self.view_menu.add_checkbutton(label="Show Content Box", command=self.toggle_content_bbox, variable=tk.BooleanVar(value=self.show_content_bbox))
         
         # Help menu
         self.help_menu = tk.Menu(self.menu_bar, tearoff=0)
@@ -190,6 +203,8 @@ class ImageViewerApp(tk.Tk):
         self.bind("s", lambda event: self.adjust_grid_size())
         self.bind("4", lambda event: self.export_to_pdf(42))  # 42" paper with Ctrl+4
         self.bind("5", lambda event: self.export_to_pdf(44))  # 44" paper with Ctrl+5
+        self.bind("d", lambda event: self.detect_content())  # Detect content with 'd'
+        self.bind("b", lambda event: self.toggle_content_bbox())
     
     def on_canvas_press(self, event):
         """Handle mouse button press on canvas"""
@@ -311,43 +326,91 @@ class ImageViewerApp(tk.Tk):
             # Display the image
             self.show_image()
     
-    def show_image(self):
-        """Display the current image on the canvas"""
-        # Clear previous content
-        self.canvas.delete("all")
+    def show_image(self, render_grid=True):
+        if not hasattr(self, 'original_pil_image'):
+            return
+
+        # Get current canvas width & height
+        canvas_width = self.canvas.winfo_width()
+        canvas_height = self.canvas.winfo_height()
+
+        # Calculate the size to fit in view
+        img_width, img_height = self.original_pil_image.size
+        scale = min(canvas_width / img_width, canvas_height / img_height)
         
-        if hasattr(self, 'display_image'):
-            # Center image on canvas
-            canvas_width = self.canvas.winfo_width()
-            canvas_height = self.canvas.winfo_height()
+        # Scale image
+        new_width = int(img_width * scale)
+        new_height = int(img_height * scale)
+
+        # Clear old image and grid
+        self.canvas.delete("all")
+
+        # Create and save the photo image
+        resized_img = self.original_pil_image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        self.displayed_img = ImageTk.PhotoImage(resized_img)
+        
+        # Calculate position to center the image
+        x_position = (canvas_width - new_width) // 2
+        y_position = (canvas_height - new_height) // 2
+        
+        # Draw the image on canvas
+        self.img_id = self.canvas.create_image(x_position, y_position, anchor=tk.NW, image=self.displayed_img)
+        
+        # Draw grid on top if enabled
+        if render_grid and self.show_grid:
+            self.draw_grid(x_position, y_position, new_width, new_height, scale)
+        
+        # Draw content bounding box if enabled
+        if hasattr(self, 'show_content_bbox') and self.show_content_bbox and self.content_bbox:
+            x_min, y_min, x_max, y_max = self.content_bbox
+            # Scale to match current display
+            x1 = x_position + x_min * scale
+            y1 = y_position + y_min * scale
+            x2 = x_position + x_max * scale
+            y2 = y_position + y_max * scale
             
-            x_position = max(0, (canvas_width - self.display_image.width()) // 2)
-            y_position = max(0, (canvas_height - self.display_image.height()) // 2)
-            
-            # Show image
-            self.image_id = self.canvas.create_image(x_position, y_position, anchor=tk.NW, image=self.display_image)
-            
-            # Draw grid if enabled
-            if self.show_grid:
-                self.draw_grid()
-            
-            # Display image dimensions and grid info in bottom-right corner
-            info_text = f"Dimensions: 1.00m × {self.image_height_m:.2f}m | "
-            info_text += f"Grid: {self.grid_size:.2f}m | "
-            info_text += f"Grid: {'On' if self.show_grid else 'Off'} | "
-            info_text += f"Zoom: {int(self.zoom_factor * 100)}%"
-            
-            self.canvas.create_text(
-                canvas_width - 10, canvas_height - 10,
-                text=info_text,
-                anchor=tk.SE,
-                fill="#00FFFF",
-                font=('Arial', 10, 'bold')
+            # Draw bounding box with a 3-pixel wide line
+            self.canvas.create_rectangle(
+                x1, y1, x2, y2, 
+                outline=self.content_bbox_color, 
+                width=3,
+                dash=(10, 5)  # Dashed line pattern
             )
             
-            # Configure scrollbars for the image
-            self.canvas.config(scrollregion=(0, 0, x_position * 2 + self.display_image.width(), 
-                                           y_position * 2 + self.display_image.height()))
+            # Draw dimensions text
+            content_width_m = (x_max - x_min) / img_width * self.image_width_m
+            content_height_m = (y_max - y_min) / img_height * self.image_height_m
+            
+            # Convert meters to feet and inches
+            content_width_feet = content_width_m * 3.28084  # 1 meter = 3.28084 feet
+            content_height_feet = content_height_m * 3.28084
+            
+            # Convert to feet and inches format
+            width_feet = int(content_width_feet)
+            width_inches = int((content_width_feet - width_feet) * 12)
+            height_feet = int(content_height_feet)
+            height_inches = int((content_height_feet - height_feet) * 12)
+            
+            # Format the imperial dimensions string
+            width_imperial = f"{width_feet}'{width_inches}\""
+            height_imperial = f"{height_feet}'{height_inches}\""
+            
+            # Put dimensions text above the box with both metric and imperial units
+            self.canvas.create_text(
+                (x1 + x2) / 2, y1 - 10,
+                text=f"{content_width_m:.2f}m × {content_height_m:.2f}m ({width_imperial} × {height_imperial})",
+                fill=self.content_bbox_color,
+                font=('Helvetica', 12, 'bold'),
+                anchor=tk.S
+            )
+        
+        # Update status with image dimensions
+        physical_width = self.image_width_m
+        physical_height = physical_width * (img_height / img_width)
+        self.status_var.set(f"Image dimensions: {physical_width:.2f}m × {physical_height:.2f}m | Scale: {self.grid_size:.2f}m grid")
+        
+        # Make the status label visible if it's hidden
+        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
     
     def zoom_in(self):
         """Increase zoom level"""
@@ -415,7 +478,9 @@ class ImageViewerApp(tk.Tk):
             "- h: Set image height\n"
             "- s: Adjust grid size\n"
             "- 4: Export to PDF (42\")\n"
-            "- 5: Export to PDF (44\")\n\n"
+            "- 5: Export to PDF (44\")\n"
+            "- d: Detect content\n"
+            "- b: Toggle content bounding box\n\n"
             "Created with Python and Tkinter."
         )
         messagebox.showinfo("About", about_text)
@@ -474,15 +539,8 @@ class ImageViewerApp(tk.Tk):
             if self.show_grid:
                 self.show_image()
     
-    def draw_grid(self):
+    def draw_grid(self, x_position, y_position, img_width, img_height, scale):
         """Draw a grid overlay on the canvas using the physical dimensions"""
-        if not hasattr(self, 'display_image'):
-            return
-            
-        # Get image dimensions on canvas
-        img_width = self.display_image.width()
-        img_height = self.display_image.height()
-        
         # Calculate grid spacing in pixels (convert from meters)
         # For width: 1m wide image
         grid_spacing_x = (img_width / self.image_width_m) * self.grid_size
@@ -494,12 +552,6 @@ class ImageViewerApp(tk.Tk):
             grid_spacing_x = 5
         if grid_spacing_y < 5:
             grid_spacing_y = 5
-        
-        # Get canvas position of image
-        canvas_width = self.canvas.winfo_width()
-        canvas_height = self.canvas.winfo_height()
-        x_position = max(0, (canvas_width - img_width) // 2)
-        y_position = max(0, (canvas_height - img_height) // 2)
         
         # Draw vertical grid lines
         x = x_position
@@ -514,7 +566,7 @@ class ImageViewerApp(tk.Tk):
                 fill_color = self.grid_color
             else:
                 width = 1  # Make thicker
-                fill_color = "#AAAAAA"  # Light gray
+                fill_color = "#888888"  # Light gray for minor grid lines
                 
             self.canvas.create_line(
                 x, y_position, 
@@ -550,7 +602,7 @@ class ImageViewerApp(tk.Tk):
                 fill_color = self.grid_color
             else:
                 width = 1  # Make thicker
-                fill_color = "#AAAAAA"  # Light gray
+                fill_color = "#888888"  # Light gray for minor grid lines
                 
             self.canvas.create_line(
                 x_position, y, 
@@ -700,7 +752,7 @@ class ImageViewerApp(tk.Tk):
                 grid_spacing_y = (paper_height_inches * inch) / (self.image_height_m / self.grid_size)
                 
                 # Set grid line color and width
-                c.setStrokeColorRGB(0, 0.8, 0.8)  # Cyan color
+                c.setStrokeColorRGB(0.27, 0.27, 0.27)  # Dark gray (equivalent to #444444)
                 
                 # Draw vertical grid lines
                 for x in range(0, int(paper_width_inches * inch) + 1, int(grid_spacing_x)):
@@ -750,7 +802,7 @@ class ImageViewerApp(tk.Tk):
                 c.line(scale_bar_x, scale_bar_y, scale_bar_x, scale_bar_y + scale_bar_length)
                 
                 # Draw the actual scale bar
-                c.setStrokeColorRGB(0, 0.8, 0.8)  # Cyan
+                c.setStrokeColorRGB(0.27, 0.27, 0.27)  # Dark gray
                 c.setLineWidth(5)
                 
                 # Horizontal and vertical lines
@@ -766,7 +818,7 @@ class ImageViewerApp(tk.Tk):
                                 scale_bar_y - 18 + offset_y, "10 cm")
                 
                 # Draw horizontal label
-                c.setFillColorRGB(0, 0.8, 0.8)  # Cyan
+                c.setFillColorRGB(0.27, 0.27, 0.27)  # Dark gray
                 c.setFont("Helvetica-Bold", 14)
                 c.drawString(scale_bar_x + scale_bar_length/2 - 20, scale_bar_y - 18, "10 cm")
                 
@@ -780,7 +832,7 @@ class ImageViewerApp(tk.Tk):
                 c.restoreState()
                 
                 # Draw vertical label
-                c.setFillColorRGB(0, 0.8, 0.8)  # Cyan
+                c.setFillColorRGB(0.27, 0.27, 0.27)  # Dark gray
                 c.saveState()
                 c.translate(scale_bar_x - 18, scale_bar_y + scale_bar_length/2)
                 c.rotate(90)
@@ -806,6 +858,120 @@ class ImageViewerApp(tk.Tk):
             messagebox.showerror("Export Error", f"Error creating PDF: {str(e)}")
             import traceback
             traceback.print_exc()
+
+    def detect_content(self):
+        """Detect the main content in the image using OpenCV image processing"""
+        if not hasattr(self, 'original_pil_image'):
+            messagebox.showinfo("No Image", "Please load an image first")
+            return
+            
+        try:
+            # Convert PIL image to OpenCV format
+            img_np = np.array(self.original_pil_image)
+            if len(img_np.shape) == 3 and img_np.shape[2] == 4:  # Has alpha channel
+                # Convert RGBA to RGB
+                img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGBA2RGB)
+            else:
+                img_cv = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+            
+            # Create a grayscale version for processing
+            gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+            
+            # Apply GaussianBlur to reduce noise
+            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+            
+            # Apply threshold to create binary image
+            if np.mean(gray) > 127:  # Light background
+                # Use inverse threshold for light backgrounds
+                _, binary = cv2.threshold(blurred, 240, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+            else:  # Dark background
+                # Use regular threshold for dark backgrounds
+                _, binary = cv2.threshold(blurred, 127, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                
+            # Apply morphological operations to clean up the binary image
+            kernel = np.ones((5, 5), np.uint8)
+            binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+            binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
+            
+            # Find contours in the binary image
+            contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            if not contours:
+                messagebox.showinfo("Detection Result", "No content detected in the image")
+                return
+                
+            # Filter out small contours (noise)
+            img_area = gray.shape[0] * gray.shape[1]
+            min_contour_area = img_area * 0.01  # Minimum 1% of image area
+            significant_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_contour_area]
+            
+            if not significant_contours:
+                messagebox.showinfo("Detection Result", "No significant content detected in the image")
+                return
+                
+            # Find the bounding box that encompasses all significant content
+            x_min, y_min = float('inf'), float('inf')
+            x_max, y_max = 0, 0
+            
+            for contour in significant_contours:
+                x, y, w, h = cv2.boundingRect(contour)
+                x_min = min(x_min, x)
+                y_min = min(y_min, y)
+                x_max = max(x_max, x + w)
+                y_max = max(y_max, y + h)
+            
+            # Store the bounding box
+            self.content_bbox = (x_min, y_min, x_max, y_max)
+            
+            # Calculate content dimensions in meters
+            img_width, img_height = self.original_pil_image.size
+            content_width_m = (x_max - x_min) / img_width * self.image_width_m
+            content_height_m = (y_max - y_min) / img_height * self.image_height_m
+            
+            # Convert meters to feet and inches
+            content_width_feet = content_width_m * 3.28084  # 1 meter = 3.28084 feet
+            content_height_feet = content_height_m * 3.28084
+            
+            # Convert to feet and inches format
+            width_feet = int(content_width_feet)
+            width_inches = int((content_width_feet - width_feet) * 12)
+            height_feet = int(content_height_feet)
+            height_inches = int((content_height_feet - height_feet) * 12)
+            
+            # Format the imperial dimensions string
+            width_imperial = f"{width_feet}'{width_inches}\""
+            height_imperial = f"{height_feet}'{height_inches}\""
+            
+            # Enable the bounding box display
+            self.show_content_bbox = True
+            
+            # Update the display
+            self.show_image()
+            
+            # Show success message with content dimensions
+            messagebox.showinfo(
+                "Content Detected", 
+                f"Content bounding box detected!\n\n"
+                f"Metric: {content_width_m:.2f}m × {content_height_m:.2f}m\n"
+                f"Imperial: {width_imperial} × {height_imperial}"
+            )
+            
+            self.status_var.set(f"Content detected: {content_width_m:.2f}m × {content_height_m:.2f}m ({width_imperial} × {height_imperial})")
+            
+        except Exception as e:
+            messagebox.showerror("Detection Error", f"Error during content detection: {str(e)}")
+            import traceback
+            traceback.print_exc()
+    
+    def toggle_content_bbox(self):
+        """Toggle visibility of the content bounding box"""
+        if self.content_bbox is None:
+            messagebox.showinfo("No Content Box", "Please detect content first")
+            return
+            
+        self.show_content_bbox = not self.show_content_bbox
+        self.show_image()
+        self.status_var.set(f"Content bounding box {'visible' if self.show_content_bbox else 'hidden'}")
 
 def main():
     app = ImageViewerApp()
