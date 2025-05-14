@@ -2,6 +2,9 @@
 
 This directory contains Python scripts for generating various types of architectural trusses in FreeCAD with FEM (Finite Element Method) analysis setup.
 
+![image](https://github.com/user-attachments/assets/6c324304-ba5d-4fbe-8f60-14fab6d1b8c0)
+
+
 ## Scripts Included
 
 ### 1. Pyramidal Truss (`pyramidal-truss.py`)
