@@ -3,3 +3,6 @@ opencv-python>=4.5.0
 matplotlib>=3.4.0
 pillow>=8.0.0
 reportlab>=3.6.0 
+
+# Optional dependencies
+# FreeCAD>=1.0.0  # Required for the architectural truss tools (install via your package manager) 

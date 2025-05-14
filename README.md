@@ -12,6 +12,10 @@ An image processing tool that automatically detects grid patterns in architectur
 
 A user-friendly GUI application that creates properly scaled and formatted PDFs for wide-format printing, with consistent 1-meter width and embedded metadata blocks.
 
+### 3. FreeCAD Architectural Truss Tools
+
+A collection of Python scripts for generating parametric 3D architectural trusses in FreeCAD with built-in FEM (Finite Element Method) analysis capabilities.
+
 ## Features
 
 ### Grid Vision Tool
@@ -29,6 +33,14 @@ A user-friendly GUI application that creates properly scaled and formatted PDFs 
 - Organization of output files in separate folders by paper size
 - Image preview with zoom capabilities
 - Batch processing support for multiple images
+
+### FreeCAD Truss Tools
+- Generation of various truss designs (pyramidal, rectangular, three-column, artistic)
+- Parametric dimensions for easy customization
+- Automatic FEM analysis setup for structural testing
+- Compatible with FreeCAD 1.0.0 and later
+- Built-in materials and constraints for engineering analysis
+- Detailed documentation and examples
 
 ## How It Works
 
@@ -123,6 +135,18 @@ python pdf_metadata_gui.py
    - Enter a name for the object (optional)
    - Click "Generate PDFs for both paper sizes"
    - Generated PDFs will be saved in "PDFs/42inch_prints" and "PDFs/44inch_prints"
+
+### FreeCAD Truss Tools
+
+1. Open FreeCAD (version 1.0.0 or later)
+2. Navigate to the freecad_tools directory
+3. Load one of the Python scripts using the macro functionality:
+```bash
+# Example for loading the pyramidal truss
+python3 pyramidal-truss.py
+```
+4. The script will automatically generate the truss structure with proper analysis setup
+5. See individual script comments for customization options
 
 ## Workflow Integration
 
