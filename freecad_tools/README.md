@@ -24,8 +24,6 @@ Generates a rectangular truss structure with:
 ### 3. Three Column Truss (`three_column_truss.py`)
 A three-column architectural truss design.
 
-### 4. Artistic Truss (`artistic_truss.py`)
-A more decorative truss design for artistic applications.
 
 ## Usage
 
