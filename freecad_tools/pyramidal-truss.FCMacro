@@ -8,18 +8,15 @@ import math
 # Open a new document
 doc = App.newDocument("PyramidalTrussAnalysis")
 
-# =========== Parameters ===========
+# =========== Create a pyramidal truss structure directly in FreeCAD ===========
 base_side_length = 1.0
 height = 2.3
 beam_radius = 0.05
-tolerance = 1e-5
-reinforcement_heights = [height/3, 2*height/3]
 
-# =========== Create a pyramidal truss structure directly in FreeCAD ===========
 lines = []
-base_points = []
 
 # Define the triangular base vertices
+base_points = []
 for i in range(3):
     angle = i * 2 * math.pi / 3
     x = base_side_length * math.cos(angle)
@@ -30,14 +27,13 @@ for i in range(3):
 for i in range(3):
     lines.append(Part.makePolygon([base_points[i], base_points[(i+1)%3]]))
 
-# Define the apex of the pyramid
 apex = Base.Vector(0, 0, height)
 
-# Create lines from base to apex
 for i in range(3):
     lines.append(Part.makePolygon([base_points[i], apex]))
 
-# Create reinforcement levels
+reinforcement_heights = [height/3, 2*height/3]
+
 for h in reinforcement_heights:
     reinforcement_points = []
     scale_factor = 1 - (h / height)
@@ -76,10 +72,8 @@ for h in reinforcement_heights:
             )
             lines.append(Part.makePolygon([prev_level_point, reinforcement_points[(i+1)%3]]))
 
-# Create the truss structure
 truss_structure = Part.makeCompound(lines)
 
-# Create solid beams for the truss
 solid_beams = []
 for edge in truss_structure.Edges:
     circle = Part.makeCircle(beam_radius, edge.valueAt(0), edge.tangentAt(0))
@@ -97,6 +91,7 @@ else:
 
 # =========== Set up FEM analysis ===========
 analysis = ObjectsFem.makeAnalysis(doc, "Analysis")
+
 solver = ObjectsFem.makeSolverCalculix(doc, "SolverCalculix")
 
 try:
@@ -115,7 +110,6 @@ except:
 
 analysis.addObject(solver)
 
-# Define material properties
 material = ObjectsFem.makeMaterialSolid(doc, "Material")
 mat = material.Material
 mat['Name'] = "Steel"
@@ -125,7 +119,6 @@ mat['Density'] = "7900 kg/m^3"
 material.Material = mat
 analysis.addObject(material)
 
-# Create and add FEM mesh
 try:
     mesh = ObjectsFem.makeMeshGmsh(doc, "FEMMeshGmsh")
     mesh.Part = truss_obj
@@ -137,9 +130,12 @@ try:
 except Exception as e:
     App.Console.PrintError(f"Gmsh mesher creation failed: {e}\n")
 
-# Set material references
 try:
-    solid_refs = [f"Solid{i+1}" for i, solid in enumerate(truss_obj.Shape.Solids)]
+    # Find the correct solid reference
+    solid_refs = []
+    for i, solid in enumerate(truss_obj.Shape.Solids):
+        solid_refs.append(f"Solid{i+1}")
+    
     if solid_refs:
         material.References = [(truss_obj, solid_refs)]
     else:
@@ -149,9 +145,8 @@ except Exception as e:
     App.Console.PrintError(f"Could not set material references: {e}\n")
     print("Note: Material assignment should be done manually in GUI")
 
-# =========== Constraints ===========
-# Fixed constraint
 fixed_constraint = ObjectsFem.makeConstraintFixed(doc, "FixedConstraint")
+tolerance = 1e-5
 fixed_vertex_names = []
 
 for point in base_points:
@@ -163,7 +158,6 @@ for point in base_points:
 fixed_constraint.References = [(truss_obj, name) for name in fixed_vertex_names]
 analysis.addObject(fixed_constraint)
 
-# Force constraint
 force_constraint = ObjectsFem.makeConstraintForce(doc, "ForceConstraint")
 force_vertex_name = None
 for i, vertex in enumerate(truss_obj.Shape.Vertexes):
@@ -173,15 +167,16 @@ for i, vertex in enumerate(truss_obj.Shape.Vertexes):
 
 if force_vertex_name:
     force_constraint.References = [(truss_obj, force_vertex_name)]
+    # Set direction and force values properly for the version of FreeCAD
     try:
         # For newer FreeCAD versions
         force_constraint.Direction = (0, 0, -1)  # As a tuple instead of Vector
-        force_constraint.Force = int(5000.0)  # Cast to int
+        force_constraint.Force = 5000.0
     except Exception as e:
         try:
             # Alternative approach for some FreeCAD versions
             force_constraint.DirectionVector = (0, 0, -1)
-            force_constraint.Force = int(5000.0)  # Cast to int
+            force_constraint.Force = 5000.0
         except Exception as e2:
             App.Console.PrintError(f"Could not set force constraint properties: {e2}\n")
             print("Note: Force constraint may need to be set manually in GUI")
@@ -195,5 +190,4 @@ print("1. Select the analysis object in the tree view")
 print("2. Use the 'Solve' button in the task panel or menu")
 print("3. After solving, right-click on 'SolverCalculix' and select 'Show result'")
 
-# Save the document
 doc.saveAs("/tmp/pyramidal_truss_analysis.FCStd")
